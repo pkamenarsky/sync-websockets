@@ -103,8 +103,8 @@ syncRespond session (SyncRequest rid _) res = do
   atomically $ writeTQueue (sessionQueue session) (SyncResponse rid res)
 syncRespond session _ res = return ()
 
-respond :: ToJSON r => Proxy r -> r -> IO Value
-respond _ r = return (toJSON r)
+respond :: ToJSON r => Proxy r -> r -> Value
+respond _ r = toJSON r
 
 runSyncServer :: FromJSON msgin => Int -> (msgin -> IO Value) -> IO ()
 runSyncServer port f = do
