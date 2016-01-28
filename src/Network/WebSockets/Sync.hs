@@ -111,7 +111,8 @@ runSyncServer port f = do
   WS.runServer "0.0.0.0" port $ \req -> do
     conn <- WS.acceptRequest req
 
-    void $ forkIO $ finally (return ()) $ do
+    -- void $ forkIO $ flip finally (return ()) $ do
+    do
       msg <- WS.receiveDataMessage conn
       withMessage msg $ \msgin -> do
         case msgin of
