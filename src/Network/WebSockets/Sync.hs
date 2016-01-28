@@ -12,6 +12,7 @@ import           Control.Exception
 
 import           Data.Aeson
 import           Data.Aeson.Types
+import           Data.Proxy
 
 import           Data.Hashable
 import           Data.Maybe
@@ -102,7 +103,7 @@ syncRespond session (SyncRequest rid _) res = do
   atomically $ writeTQueue (sessionQueue session) (SyncResponse rid res)
 syncRespond session _ res = return ()
 
-runSyncServer :: (FromJSON msgin, ToJSON msgout) => Int -> (msgin -> IO msgout) -> IO ()
+runSyncServer :: (FromJSON msgin, ToJSON msgout) => Int -> (msgin -> (Proxy msgout, IO msgout)) -> IO ()
 runSyncServer port f = do
   WS.runServer "0.0.0.0" port $ \req -> do
     conn <- WS.acceptRequest req
@@ -110,5 +111,5 @@ runSyncServer port f = do
     void $ forkIO $ flip finally (return ()) $ do
       msg <- WS.receiveDataMessage conn
       withMessage msg $ \msgin -> do
-        msgout <- f msgin
+        msgout <- snd $ f msgin
         WS.send conn (WS.DataMessage $ WS.Text $ encode msgout)
