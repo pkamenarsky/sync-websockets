@@ -21,6 +21,8 @@ import qualified Data.Text                      as T
 
 import qualified Network.WebSockets             as WS
 
+import           Debug.Trace
+
 data Request a = SyncRequest T.Text a
                | AsyncRequest a
 
@@ -67,8 +69,8 @@ instance Eq sid => Eq (Session sid uid user msg) where
 withMessage :: FromJSON msg => WS.DataMessage -> (msg -> IO ()) -> IO ()
 withMessage (WS.Text msg) action = case eitherDecode msg of
   Right msg -> action msg
-  Left error -> putStrLn $ "Could not parse message: " ++ show error
-withMessage msg _ = putStrLn $ "Could not parse message: " ++ show msg
+  Left error -> trace ("Could not parse message: " ++ show error) (return ())
+withMessage msg _ = trace ("Could not parse message: " ++ show msg) (return ())
 
 runConnection :: (ToJSON msgout, FromJSON msgin)
               => WS.Connection                         -- connection
@@ -78,10 +80,8 @@ runConnection :: (ToJSON msgout, FromJSON msgin)
               -> (msgin -> IO ())                      -- async action
               -> IO ()
 runConnection conn tq close sync async = do
-  -- FIXME: heartbeat
   let read = forever $ do
         msg <- WS.receiveDataMessage conn
-        putStrLn $ "Received message " ++ show msg
 
         withMessage msg $ \req -> case req of
           SyncRequest rid req -> do
@@ -93,9 +93,6 @@ runConnection conn tq close sync async = do
 
       write = forever $ do
         msg <- atomically $ readTQueue tq
-        -- FIXME: remove
-        -- threadDelay $ 1 * 10^6 `div` 2
-        putStrLn $ "Sending message " ++ show (encode msg)
         WS.send conn (WS.DataMessage $ WS.Text $ encode msg)
 
   void $ finally (race read write) close
