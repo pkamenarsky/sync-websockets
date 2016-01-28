@@ -114,5 +114,8 @@ runSyncServer port f = do
     void $ forkIO $ flip finally (return ()) $ do
       msg <- WS.receiveDataMessage conn
       withMessage msg $ \msgin -> do
-        msgout <- f msgin
-        WS.send conn (WS.DataMessage $ WS.Text $ encode msgout)
+        case msgin of
+          SyncRequest rid msgin -> do
+            msgout <- f msgin
+            WS.send conn (WS.DataMessage $ WS.Text $ encode (SyncResponse rid msgout))
+          _ -> return ()
