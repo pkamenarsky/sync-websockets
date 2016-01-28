@@ -4,9 +4,10 @@ module Network.WebSockets.Sync where
 
 import           Control.Monad
 
-import           Control.Concurrent.STM
+import           Control.Concurrent
 import           Control.Concurrent.Async
 import           Control.Concurrent.Chan
+import           Control.Concurrent.STM
 import           Control.Exception
 
 import           Data.Aeson
@@ -23,6 +24,10 @@ import qualified Network.WebSockets             as WS
 data Request a = SyncRequest T.Text a
                | AsyncRequest a
 
+data Response a = SyncResponse T.Text a
+                | SyncError T.Text T.Text
+                | AsyncMessage a
+
 instance FromJSON a => FromJSON (Request a) where
   parseJSON (Object o) = do
     rtype <- o .: "cmd"
@@ -32,10 +37,6 @@ instance FromJSON a => FromJSON (Request a) where
           parse "async-request" = AsyncRequest <$> o .: "request"
 
   parseJSON _          = fail "Could not parse request"
-
-data Response a = SyncResponse T.Text a
-                | SyncError T.Text T.Text
-                | AsyncMessage a
 
 instance ToJSON a => ToJSON (Response a) where
   toJSON (SyncResponse rid msg) = object
@@ -103,3 +104,14 @@ syncRespond :: Session sid uid user msg -> Request b -> msg -> IO ()
 syncRespond session (SyncRequest rid _) res = do
   atomically $ writeTQueue (sessionQueue session) (SyncResponse rid res)
 syncRespond session _ res = return ()
+
+runSyncServer :: (FromJSON msgin, ToJSON msgout) => Int -> (msgin -> IO msgout) -> IO ()
+runSyncServer port f = do
+  WS.runServer "0.0.0.0" port $ \req -> do
+    conn <- WS.acceptRequest req
+
+    void $ forkIO $ flip finally (return ()) $ do
+      msg <- WS.receiveDataMessage conn
+      withMessage msg $ \msgin -> do
+        msgout <- f msgin
+        WS.send conn (WS.DataMessage $ WS.Text $ encode msgout)
