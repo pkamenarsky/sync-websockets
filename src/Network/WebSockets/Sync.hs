@@ -103,7 +103,10 @@ syncRespond session (SyncRequest rid _) res = do
   atomically $ writeTQueue (sessionQueue session) (SyncResponse rid res)
 syncRespond session _ res = return ()
 
-runSyncServer :: (FromJSON msgin, ToJSON msgout) => Int -> (msgin -> (Proxy msgout, IO msgout)) -> IO ()
+respond :: ToJSON r => Proxy r -> r -> IO Value
+respond _ r = return (toJSON r)
+
+runSyncServer :: FromJSON msgin => Int -> (msgin -> IO Value) -> IO ()
 runSyncServer port f = do
   WS.runServer "0.0.0.0" port $ \req -> do
     conn <- WS.acceptRequest req
@@ -111,5 +114,5 @@ runSyncServer port f = do
     void $ forkIO $ flip finally (return ()) $ do
       msg <- WS.receiveDataMessage conn
       withMessage msg $ \msgin -> do
-        msgout <- snd $ f msgin
+        msgout <- f msgin
         WS.send conn (WS.DataMessage $ WS.Text $ encode msgout)
