@@ -88,10 +88,9 @@ runConnection conn tq close sync async = do
 
   void $ finally (race read write) close
 
-syncRespond :: TQueue (Response msg) -> Request b -> Proxy msg -> msg -> IO ()
-syncRespond queue (SyncRequest rid _) _ res = do
-  atomically $ writeTQueue queue (SyncResponse rid res)
-syncRespond _ _ _ _ = return ()
+mkSyncResponse :: Request b -> msg -> Maybe (Response msg)
+mkSyncResponse (SyncRequest rid _) res = Just $ SyncResponse rid res
+mkSyncResponse _ _ = Nothing
 
 respond :: ToJSON r => Proxy r -> r -> Value
 respond _ r = toJSON r
