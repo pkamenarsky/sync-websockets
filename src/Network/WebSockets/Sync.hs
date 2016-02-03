@@ -57,16 +57,6 @@ instance ToJSON a => ToJSON (Response a) where
     , "message" .= a
     ]
 
-data Session sid uid user msg = Session
-  { sessionId :: sid
-  , sessionUserId :: uid
-  , sessionUser :: user
-  , sessionQueue :: TQueue (Response msg)
-  }
-
-instance Eq sid => Eq (Session sid uid user msg) where
-  s1 == s2 = sessionId s1 == sessionId s2
-
 withMessage :: FromJSON msg => WS.DataMessage -> (msg -> IO ()) -> IO ()
 withMessage (WS.Text msg) action = case eitherDecode msg of
   Right msg -> action msg
@@ -98,9 +88,9 @@ runConnection conn tq close sync async = do
 
   void $ finally (race read write) close
 
-syncRespond :: Session sid uid user msg -> Request b -> msg -> IO ()
-syncRespond session (SyncRequest rid _) res = do
-  atomically $ writeTQueue (sessionQueue session) (SyncResponse rid res)
+syncRespond :: TQueue (Response msg) -> Request b -> msg -> IO ()
+syncRespond queue (SyncRequest rid _) res = do
+  atomically $ writeTQueue queue (SyncResponse rid res)
 syncRespond session _ res = return ()
 
 respond :: ToJSON r => Proxy r -> r -> Value
