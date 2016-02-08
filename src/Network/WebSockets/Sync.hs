@@ -26,10 +26,12 @@ import           Debug.Trace
 
 data Request a = SyncRequest T.Text a
                | AsyncRequest a
+               deriving Show
 
 data Response a = SyncResponse T.Text a
                 | SyncError T.Text T.Text
                 | AsyncMessage a
+                deriving Show
 
 instance FromJSON a => FromJSON (Request a) where
   parseJSON (Object o) = do
