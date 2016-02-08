@@ -92,6 +92,9 @@ mkSyncResponse :: Request b -> msg -> Maybe (Response msg)
 mkSyncResponse (SyncRequest rid _) res = Just $ SyncResponse rid res
 mkSyncResponse _ _ = Nothing
 
+mkAsyncMessage :: msg -> Response msg
+mkAsyncMessage = AsyncMessage
+
 respond :: ToJSON r => Proxy r -> r -> Value
 respond _ r = toJSON r
 
