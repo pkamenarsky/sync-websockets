@@ -4,6 +4,7 @@ module Network.WebSockets.Sync where
 
 import           Control.Monad
 
+import           Control.Applicative ((<|>))
 import           Control.Concurrent
 import           Control.Concurrent.Async
 import           Control.Concurrent.Chan
@@ -13,12 +14,14 @@ import           Control.Exception
 import           Data.Aeson
 import           Data.Aeson.Types
 import           Data.Proxy
+import           Data.Monoid ((<>))
 
 import           Data.Hashable
 import           Data.Maybe
 
 import qualified Data.ByteString.Lazy           as B
 import qualified Data.Text                      as T
+import qualified Data.Text.Encoding             as TE
 
 import qualified Network.WebSockets             as WS
 
@@ -32,6 +35,17 @@ data Response a = SyncResponse T.Text a
                 | SyncError T.Text T.Text
                 | AsyncMessage a
                 deriving Show
+
+instance ToJSON a => ToJSON (Request a) where
+  toJSON (SyncRequest rid req) = object
+    [ "cmd" .= ("sync-request" :: T.Text)
+    , "rid" .= rid
+    , "request" .= req
+    ]
+  toJSON (AsyncRequest req) = object
+    [ "cmd" .= ("sync-request" :: T.Text)
+    , "request" .= req
+    ]
 
 instance FromJSON a => FromJSON (Request a) where
   parseJSON (Object o) = do
@@ -58,6 +72,17 @@ instance ToJSON a => ToJSON (Response a) where
     [ "cmd" .= ("async-message" :: T.Text)
     , "message" .= a
     ]
+
+instance FromJSON a => FromJSON (Response a) where
+  parseJSON (Object o) = do
+    rtype <- o .: "cmd"
+    parse (rtype :: T.Text)
+
+    where parse "sync-response"  = SyncResponse  <$> o .: "rid" <*> o .: "response"
+                               <|> SyncError  <$> o .: "rid" <*> o .: "error"
+          parse "async-message" = AsyncMessage <$> o .: "message"
+
+  parseJSON _          = fail "Could not parse request"
 
 withMessage :: FromJSON msg => WS.DataMessage -> (msg -> IO ()) -> IO ()
 withMessage (WS.Text msg) action = case eitherDecode msg of
@@ -114,3 +139,14 @@ runSyncServer port f = do
             msgout <- f msgin
             WS.send conn (WS.DataMessage $ WS.Text $ encode (SyncResponse rid msgout))
           _ -> return ()
+
+sendSync :: (ToJSON a, FromJSON b) => WS.Connection -> (Proxy b -> a) -> IO (Either T.Text b)
+sendSync conn req = do
+  WS.sendDataMessage conn (WS.Text $ encode $ SyncRequest "" (req Proxy))
+  msg <- WS.receiveDataMessage conn
+  case msg of
+    WS.Text msg -> case decode msg of
+      Just (SyncResponse _ res) -> return $ Right res
+      Just _ -> return $ Left $ "Not a sync response: " <> TE.decodeUtf8 (B.toStrict msg)
+      Nothing -> return $ Left $ "Could not decode message: " <> TE.decodeUtf8 (B.toStrict msg)
+    _ -> return $ Left $ "Not a data message"
