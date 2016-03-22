@@ -142,7 +142,7 @@ runSyncServer port f = do
 
 sendSync :: (ToJSON a, FromJSON b) => WS.Connection -> (Proxy b -> a) -> IO (Either T.Text b)
 sendSync conn req = do
-  WS.sendDataMessage conn (WS.Text $ encode $ SyncRequest "" (req Proxy))
+  WS.sendDataMessage conn (WS.Text $ encode $ SyncRequest "1234567890" (req Proxy))
   msg <- WS.receiveDataMessage conn
   case msg of
     WS.Text msg -> case decode msg of
