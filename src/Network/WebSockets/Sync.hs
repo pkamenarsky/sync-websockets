@@ -25,8 +25,6 @@ import qualified Data.Text.Encoding             as TE
 
 import qualified Network.WebSockets             as WS
 
-import           Debug.Trace
-
 data Request a = SyncRequest T.Text a
                | AsyncRequest a
                deriving Show
@@ -87,8 +85,8 @@ instance FromJSON a => FromJSON (Response a) where
 withMessage :: FromJSON msg => WS.DataMessage -> (msg -> IO ()) -> IO ()
 withMessage (WS.Text msg) action = case eitherDecode msg of
   Right msg -> action msg
-  Left error -> trace ("Could not parse message: " ++ show error) (return ())
-withMessage msg _ = trace ("Could not parse message: " ++ show msg) (return ())
+  Left error -> return ()
+withMessage msg _ = return ()
 
 runConnection :: (ToJSON msgout, FromJSON msgin)
               => WS.Connection                         -- connection
